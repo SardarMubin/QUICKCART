@@ -58,8 +58,12 @@ export default function Chatbot() {
       };
 
       setMessages([...updatedMessages, botReply]);
-    } catch (err: any) {
-      setError(err.message || "Something went wrong");
+    } catch (err: unknown) {
+      let message = "Something went wrong";
+      if (err instanceof Error) {
+        message = err.message;
+      }
+      setError(message);
       setMessages([
         ...updatedMessages,
         { from: "bot", text: "❌ Sorry, I couldn't get a response." },

@@ -5,7 +5,16 @@ import { headers } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 
-// --- Stripe Webhook Handler ---
+// Define a product reference type for Sanity order
+type SanityOrderProduct = {
+  _key: string;
+  product: {
+    _type: "reference";
+    _ref: string;
+  };
+  quantity: number;
+};
+
 export async function POST(req: NextRequest) {
   const body = await req.text();
   const sig = headers().get("stripe-signature");
@@ -22,11 +31,10 @@ export async function POST(req: NextRequest) {
   try {
     event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
   } catch (err) {
-    console.error("\u274C Invalid Stripe signature:", err);
+    console.error("❌ Invalid Stripe signature:", err);
     return NextResponse.json({ error: "Invalid Stripe signature" }, { status: 400 });
   }
 
-  // Handle checkout completion
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
 
@@ -37,7 +45,7 @@ export async function POST(req: NextRequest) {
 
       await createOrderInSanity(session, invoice);
     } catch (err) {
-      console.error("\u274C Failed to create order:", err);
+      console.error("❌ Failed to create order:", err);
       return NextResponse.json({ error: "Failed to create order" }, { status: 500 });
     }
   }
@@ -73,7 +81,7 @@ async function createOrderInSanity(
     expand: ["data.price.product"],
   });
 
-  const products: any[] = [];
+  const products: SanityOrderProduct[] = [];
   const stockUpdates: { productId: string; quantity: number }[] = [];
 
   for (const item of lineItems.data) {
@@ -143,14 +151,14 @@ async function updateStockLevels(
       const product = await backendClient.getDocument(productId);
 
       if (!product || typeof product.stock !== "number") {
-        console.warn(`\u26A0\uFE0F Invalid stock for product ${productId}`);
+        console.warn(`⚠️ Invalid stock for product ${productId}`);
         continue;
       }
 
       const newStock = Math.max(product.stock - quantity, 0);
       await backendClient.patch(productId).set({ stock: newStock }).commit();
     } catch (err) {
-      console.error(`\u274C Failed to update stock for ${productId}:`, err);
+      console.error(`❌ Failed to update stock for ${productId}:`, err);
     }
   }
 }
